@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#8EA58C"/><stop offset="1" stop-color="#607b65"/></linearGradient>
+  <linearGradient id="fruit" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#f8d1d0"/><stop offset="1" stop-color="#F5C3C2"/></linearGradient>
+  <filter id="shadow" x="-30%" y="-25%" width="160%" height="170%"><feDropShadow dx="0" dy="14" stdDeviation="15" flood-color="#314b37" flood-opacity=".32"/></filter>
+</defs>
+<rect x="8" y="8" width="496" height="496" rx="112" fill="url(#bg)"/>
+<circle cx="256" cy="259" r="198" fill="#F5C3C2" opacity=".13"/>
+<g filter="url(#shadow)">
+  <path d="M256 153c-78-54-160 7-133 105 20 72 86 147 133 191 47-44 113-119 133-191 27-98-55-159-133-105z" fill="url(#fruit)" stroke="#8EA58C" stroke-width="7"/>
+  <path d="M256 155c-8-41-39-63-74-53 8 23 30 41 58 47-30-28-69-31-93-12 18 25 48 34 82 28-24 10-38 29-40 52 31-5 54-24 67-51 13 27 36 46 67 51-2-23-16-42-40-52 34 6 64-3 82-28-24-19-63-16-93 12 28-6 50-24 58-47-35-10-66 12-74 53z" fill="#607b65"/>
+  <path d="M256 186v213" stroke="#F5C3C2" stroke-opacity=".52" stroke-width="5" stroke-linecap="round"/>
+  <g fill="#607b65">
+    <ellipse cx="202" cy="222" rx="6" ry="11" transform="rotate(-23 202 222)"/><ellipse cx="258" cy="215" rx="6" ry="11"/><ellipse cx="310" cy="226" rx="6" ry="11" transform="rotate(23 310 226)"/>
+    <ellipse cx="184" cy="273" rx="6" ry="11" transform="rotate(-23 184 273)"/><ellipse cx="230" cy="267" rx="6" ry="11"/><ellipse cx="282" cy="268" rx="6" ry="11"/><ellipse cx="328" cy="276" rx="6" ry="11" transform="rotate(23 328 276)"/>
+    <ellipse cx="207" cy="323" rx="6" ry="11" transform="rotate(-18 207 323)"/><ellipse cx="257" cy="318" rx="6" ry="11"/><ellipse cx="307" cy="323" rx="6" ry="11" transform="rotate(18 307 323)"/>
+    <ellipse cx="235" cy="369" rx="6" ry="11" transform="rotate(-10 235 369)"/><ellipse cx="278" cy="369" rx="6" ry="11" transform="rotate(10 278 369)"/>
+  </g>
+  <path d="m226 278 30 34 30-34m-30 34v42" fill="none" stroke="#607b65" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<rect x="9" y="9" width="494" height="494" rx="110" fill="none" stroke="#F5C3C2" stroke-opacity=".9" stroke-width="3"/>
+</svg>

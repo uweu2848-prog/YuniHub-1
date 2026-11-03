@@ -1,0 +1,14 @@
+{
+  "name": "Yuni",
+  "description": "Soft violet dark theme with rounded surfaces. The YuniSpot default.",
+  "colors": {
+    "base": "#0d0d14",
+    "highlight": "#171722",
+    "press": "#0a0a10",
+    "elevated": "#1c1c2a",
+    "elevatedHighlight": "#262639",
+    "text": "#f4f4fb",
+    "subdued": "#a2a2b8",
+    "accent": "#a78bfa"
+  }
+}

@@ -2,3 +2,5 @@ node_modules/
 dist/
 renderer/generated/
 renderer/app.bundle.js
+build/staged-yunispot/
+release-assets/

@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" xmlns:c2pa="http://c2pa.org/manifest"><defs>
 <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#07060f"/><stop offset="1" stop-color="#160a2a"/></linearGradient>
-<radialGradient id="floor" cx="50%" cy="100%" r="70%"><stop offset="0" stop-color="#39ff96" stop-opacity=".45"/><stop offset="1" stop-color="#39ff96" stop-opacity="0"/></radialGradient>
-<linearGradient id="ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6dffb4"/><stop offset=".5" stop-color="#8b5cf6"/><stop offset="1" stop-color="#2e0f66"/></linearGradient>
+<radialGradient id="floor" cx="50%" cy="100%" r="70%"><stop offset="0" stop-color="#ff63b6" stop-opacity=".45"/><stop offset="1" stop-color="#ff63b6" stop-opacity="0"/></radialGradient>
+<linearGradient id="ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffacd3"/><stop offset=".5" stop-color="#9d7cff"/><stop offset="1" stop-color="#38205d"/></linearGradient>
 <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".75"/><stop offset="1" stop-color="#fff" stop-opacity=".04"/></linearGradient>
 <linearGradient id="glossSoft" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
 <linearGradient id="mid" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#150a28"/><stop offset="1" stop-color="#04030a"/></linearGradient>
-<linearGradient id="gem" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c9ffe3"/><stop offset=".45" stop-color="#39ff96"/><stop offset="1" stop-color="#6d28d9"/></linearGradient>
-<radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#a855f7" stop-opacity=".55"/><stop offset="1" stop-color="#a855f7" stop-opacity="0"/></radialGradient>
+<linearGradient id="gem" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe1ee"/><stop offset=".45" stop-color="#ff63b6"/><stop offset="1" stop-color="#6136b0"/></linearGradient>
+<radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#9d7cff" stop-opacity=".55"/><stop offset="1" stop-color="#9d7cff" stop-opacity="0"/></radialGradient>
 <clipPath id="cOuter"><polygon points="256.0,81.0 407.6,168.5 407.6,343.5 256.0,431.0 104.4,343.5 104.4,168.5"/></clipPath>
 <clipPath id="cMid"><polygon points="256.0,146.0 351.3,201.0 351.3,311.0 256.0,366.0 160.7,311.0 160.7,201.0"/></clipPath>
 <clipPath id="cCore"><polygon points="256.0,183.0 319.2,219.5 319.2,292.5 256.0,329.0 192.8,292.5 192.8,219.5"/></clipPath>
@@ -20,9 +20,9 @@
 <g filter="url(#ds)"><polygon points="256.0,86.0 403.2,171.0 403.2,341.0 256.0,426.0 108.8,341.0 108.8,171.0" fill="url(#ring)" stroke="url(#ring)" stroke-width="10" stroke-linejoin="round"/></g>
 <g clip-path="url(#cOuter)"><path d="M0 0 H512 V250 Q256 330 0 250 Z" fill="url(#gloss)" opacity=".55"/></g>
 <polygon points="256.0,90.0 399.8,173.0 399.8,339.0 256.0,422.0 112.2,339.0 112.2,173.0" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width="2" stroke-linejoin="round"/>
-<polygon points="256.0,148.0 349.5,202.0 349.5,310.0 256.0,364.0 162.5,310.0 162.5,202.0" fill="url(#mid)" stroke="#39ff96" stroke-opacity=".55" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="256.0,148.0 349.5,202.0 349.5,310.0 256.0,364.0 162.5,310.0 162.5,202.0" fill="url(#mid)" stroke="#ff63b6" stroke-opacity=".55" stroke-width="3" stroke-linejoin="round"/>
 <g clip-path="url(#cMid)"><path d="M0 0 H512 V250 Q256 330 0 250 Z" fill="url(#glossSoft)" transform="translate(0,-10)"/></g>
-<polygon points="256.0,186.0 316.6,221.0 316.6,291.0 256.0,326.0 195.4,291.0 195.4,221.0" fill="url(#gem)" stroke="#d8ffe9" stroke-opacity=".6" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="256.0,186.0 316.6,221.0 316.6,291.0 256.0,326.0 195.4,291.0 195.4,221.0" fill="url(#gem)" stroke="#ffe2ef" stroke-opacity=".6" stroke-width="3" stroke-linejoin="round"/>
 <g clip-path="url(#cCore)"><path d="M0 0 H512 V248 Q256 295 0 248 Z" fill="url(#gloss)" opacity=".6"/></g>
 <path d="M231 231 L256 262 L281 231 M256 262 V293" fill="none" stroke="#1d0845" stroke-opacity=".6" stroke-width="15" stroke-linecap="round" stroke-linejoin="round" transform="translate(0,3)"/>
 <path d="M231 231 L256 262 L281 231 M256 262 V293" fill="none" stroke="#fff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>

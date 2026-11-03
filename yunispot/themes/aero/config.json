@@ -1,0 +1,14 @@
+{
+  "name": "Aero",
+  "description": "Sky-blue Vista/Win7-style glass with glossy highlights.",
+  "colors": {
+    "base": "rgba(16, 28, 48, 0.52)",
+    "highlight": "rgba(255, 255, 255, 0.07)",
+    "press": "rgba(255, 255, 255, 0.03)",
+    "elevated": "rgba(18, 32, 56, 0.94)",
+    "elevatedHighlight": "rgba(190, 230, 255, 0.12)",
+    "text": "#f2f8ff",
+    "subdued": "#9db4cc",
+    "accent": "#3db8ff"
+  }
+}

@@ -8,9 +8,38 @@ contextBridge.exposeInMainWorld('hub', {
   load: () => call('store:load'),
   save: (data) => call('store:save', data),
   pick: (kind) => call('dialog:pick', kind),
+  pickCustomFont: () => call('appearance:pickFont'),
+  readCustomFont: (fontPath) => call('appearance:readFont', fontPath),
+  spotifyConnect: (clientId) => call('spotify:connect', clientId),
+  spotifyStatus: (clientId) => call('spotify:status', clientId),
+  spotifyDisconnect: () => call('spotify:disconnect'),
+  onSpotifyAuth: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('spotify:auth-result', listener);
+    return () => ipcRenderer.removeListener('spotify:auth-result', listener);
+  },
   launch: (opts) => call('project:launch', opts),
+  yuniSpotStatus: () => call('yunispot:status'),
+  manageYuniSpot: (action) => call('yunispot:manage', action),
+  openOrbCompleter: () => call('orb-completer:launch'),
   reveal: (folder) => call('project:reveal', folder),
-  openCode: (folder) => call('project:code', folder),
+  runStudioCommand: (request) => call('studio:runCommand', request),
+  startStudioTerminal: (folder) => call('studio:terminalStart', folder),
+  writeStudioTerminal: (request) => call('studio:terminalWrite', request),
+  writeStudioTerminalInput: (request) => call('studio:terminalInput', request),
+  stopStudioTerminal: (sessionId) => call('studio:terminalStop', sessionId),
+  onStudioTerminalData: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('studio:terminal:data', listener);
+    return () => ipcRenderer.removeListener('studio:terminal:data', listener);
+  },
+  detectStudioToolchains: () => call('studio:toolchains'),
+  listStudioPorts: () => call('studio:ports'),
+  listWorkspaceFiles: (folder) => call('workspace:listFiles', folder),
+  diagnoseWorkspace: (folder) => call('workspace:diagnose', folder),
+  readWorkspaceFile: (request) => call('workspace:readFile', request),
+  saveWorkspaceFile: (request) => call('workspace:saveFile', request),
+  createWorkspaceFile: (request) => call('workspace:createFile', request),
   openUrl: (url) => call('app:openUrl', url),
   info: () => call('app:info'),
   updateState: () => call('update:state'),
@@ -25,7 +54,7 @@ contextBridge.exposeInMainWorld('hub', {
   getMode: () => call('app:info').then((d) => d && d.buildMode ? d.buildMode : 'release'),
   setLogin: (on) => call('app:setLogin', on),
   setPrefs: (prefs) => call('app:setPrefs', prefs),
-  setTheme: (theme, customBackground) => call('app:setTheme', theme, customBackground),
+  setTheme: (theme, customBackground, iconDataUrl) => call('app:setTheme', theme, customBackground, iconDataUrl),
   openBackups: () => call('app:openBackups'),
   exportData: (json) => call('data:export', json),
   importData: () => call('data:import'),

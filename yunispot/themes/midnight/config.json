@@ -1,0 +1,14 @@
+{
+  "name": "Midnight",
+  "description": "Deep navy with a cyan accent.",
+  "colors": {
+    "base": "#070b14",
+    "highlight": "#0e1522",
+    "press": "#05080f",
+    "elevated": "#131c2d",
+    "elevatedHighlight": "#1b2740",
+    "text": "#eaf2ff",
+    "subdued": "#8fa3c2",
+    "accent": "#38bdf8"
+  }
+}

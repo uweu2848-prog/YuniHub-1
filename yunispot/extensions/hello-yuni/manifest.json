@@ -1,0 +1,6 @@
+{
+  "name": "hello-yuni",
+  "version": "1.0.0",
+  "description": "Example extension. Shows a toast on every track change and adds a command.",
+  "permissions": ["player", "ui", "storage"]
+}

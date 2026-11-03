@@ -1,0 +1,262 @@
+/*
+ * YuniHub theme: red + black aero-glass.
+ *
+ * How the glass works: the <html> element carries a dark base with red radial glows. Every big
+ * panel is a translucent dark layer with backdrop-filter, so the glow bleeds through softly.
+ * Performance: blur is used only on ~4 large static panels + menus. If it ever feels heavy,
+ * run "Toggle glass effects" in the Ctrl+K palette (or add class yuni-lite) to turn blur off.
+ *
+ * Selectors use Spotify's long-lived Root__* classes and data-testid hooks. If a rule stops
+ * matching after a Spotify update, inspect it with DevTools (Ctrl+Shift+I) and adjust here.
+ */
+
+:root {
+  --yuni-font: "JetBrains Mono", "Cascadia Code", "Cascadia Mono", Consolas, "SF Mono", Menlo, ui-monospace, monospace;
+  --yuni-sans: "Segoe UI Variable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --yuni-radius: 14px;
+  --yuni-radius-sm: 10px;
+  --yuni-glass: rgba(14, 15, 21, .78);
+  --yuni-glass-strong: rgba(18, 19, 26, .96);
+  --yuni-border: rgba(255, 255, 255, .075);
+  --yuni-red: var(--yuni-accent,#ff2b2b);
+  --yuni-red-deep: var(--yuni-btn-bottom,#c40000);
+  --yuni-glow: 0 0 26px rgba(var(--yuni-accent-rgb,255,43,43), .28);
+  --yuni-blur: blur(22px) saturate(150%);
+}
+html.yuni-sans { --yuni-font: var(--yuni-sans); }
+html.yuni-lite {
+  --yuni-glass: rgba(14, 14, 19, .97);
+  --yuni-glass-strong: #14141b;
+  --yuni-blur: none;
+}
+
+/* ---------- backdrop: dark base + red glows ---------- */
+html {
+  background:
+    radial-gradient(900px 560px at 100% -5%, rgba(var(--yuni-accent-rgb,255,43,43), .26), transparent 62%),
+    radial-gradient(760px 520px at -5% 105%, rgba(var(--yuni-accent-rgb,255,43,43), .22), transparent 60%),
+    radial-gradient(420px 900px at 14% 40%, rgba(var(--yuni-accent-rgb,255,43,43), .07), transparent 70%),
+    #050507 !important;
+  background-attachment: fixed !important;
+}
+body, #main, .Root, .Root__top-container { background: transparent !important; }
+
+/* ---------- typography ---------- */
+body, input, button, textarea, select,
+h1, h2, h3, h4, h5, h6,
+[class*="encore-text"] {
+  font-family: var(--yuni-font) !important;
+}
+h1, h2, h3 { letter-spacing: 0; }
+
+/* ---------- glass panels ---------- */
+.Root__nav-bar,
+.Root__main-view,
+.Root__right-sidebar,
+.Root__now-playing-bar {
+  background: linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.014) 44%,transparent 70%),rgba(13,14,21,.76) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  border: 1px solid rgba(255,255,255,.105);
+  border-radius: var(--yuni-radius);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12),inset 0 0 0 1px rgba(var(--yuni-accent-rgb,255,43,43),.025),0 14px 38px rgba(0,0,0,.34);
+}
+html.yuni-dock .Root__nav-bar,
+html.yuni-dock .Root__main-view,
+html.yuni-dock .Root__right-sidebar,
+html.yuni-dock .Root__now-playing-bar {
+  background: #090a0d !important;
+  background-image: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .09), 0 12px 36px rgba(0, 0, 0, .45) !important;
+}
+html.yuni-dock .Root__main-view .main-view-container,
+html.yuni-dock .Root__main-view .main-view-container__scroll-node-child,
+html.yuni-dock .Root__main-view [data-testid="playlist-page"],
+html.yuni-dock .Root__main-view [data-testid="album-page"],
+html.yuni-dock .Root__main-view [data-testid="artist-page"],
+html.yuni-dock .Root__main-view [class*="entityHeader-background"],
+html.yuni-dock .Root__main-view [class*="ActionBarRow-background"] {
+  background: rgba(10, 10, 12, .96) !important;
+  background-image: none !important;
+}
+/* inner library container sits on the sidebar glass, so keep it clear */
+.Root__nav-bar [class*="libraryContainer"],
+.main-yourLibraryX-libraryContainer { background: transparent !important; }
+
+/* top bar + sticky list header blur so scrolled content stays readable */
+.main-topBar-container,
+.main-trackList-trackListHeaderRow {
+  background: rgba(16,17,23,.84) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* ---------- sidebar items ---------- */
+.Root__nav-bar a,.Root__nav-bar button { border-radius: var(--yuni-radius-sm); transition: background .18s ease,color .18s ease,border-color .18s ease,transform .18s ease; }
+.Root__nav-bar a:hover,.Root__nav-bar button:hover { background:rgba(255,255,255,.075)!important; }
+.Root__nav-bar a[aria-current="page"],.Root__nav-bar a[aria-selected="true"]{background:linear-gradient(100deg,rgba(var(--yuni-accent-rgb,255,43,43),.2),rgba(var(--yuni-accent-rgb,255,43,43),.055))!important;box-shadow:inset 2px 0 var(--yuni-red),inset 0 0 0 1px rgba(var(--yuni-accent-rgb,255,43,43),.16)}
+.Root__nav-bar button:active { transform:scale(.96) }
+
+/* ---------- cards ---------- */
+.main-card-card {
+  background:linear-gradient(150deg,rgba(255,255,255,.075),rgba(255,255,255,.016) 60%),rgba(15,16,22,.58)!important;
+  border:1px solid rgba(255,255,255,.1);
+  border-radius: var(--yuni-radius);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.085),0 8px 22px rgba(0,0,0,.18);
+  transition:transform .22s cubic-bezier(.2,.75,.25,1),border-color .2s ease,box-shadow .2s ease,background .2s ease;
+}
+.main-card-card:hover {
+  transform:translateY(-3px);
+  border-color:rgba(var(--yuni-accent-rgb,255,43,43),.48);
+  background:linear-gradient(145deg,rgba(255,255,255,.095),rgba(var(--yuni-accent-rgb,255,43,43),.055) 65%),rgba(15,16,22,.72)!important;
+  box-shadow:0 0 0 1px rgba(var(--yuni-accent-rgb,255,43,43),.13),0 18px 38px rgba(0,0,0,.42),0 0 24px rgba(var(--yuni-accent-rgb,255,43,43),.12);
+}
+
+/* ---------- track rows ---------- */
+[data-testid="tracklist-row"] { border-radius: 10px; transition: background .18s ease,box-shadow .18s ease,color .18s ease; }
+[data-testid="tracklist-row"]:hover { background: rgba(var(--yuni-accent-rgb,255,43,43), .08) !important; box-shadow:inset 2px 0 rgba(var(--yuni-accent-rgb,255,43,43),.62) }
+[data-testid="tracklist-row"][aria-selected="true"] { background: rgba(var(--yuni-accent-rgb,255,43,43), .15) !important; }
+.main-card-card img{transition:transform .28s ease,filter .28s ease}
+.main-card-card:hover img{transform:scale(1.025);filter:saturate(1.08)}
+
+/* ---------- buttons: red glass circles with our own play/pause glyph ----------
+ * Spotify's own icon + circle colours vary between builds (white circle, hidden or white-on-white
+ * icon). So we hide whatever Spotify draws inside the button, force the red glass on the button
+ * itself and draw the play/pause glyph ourselves with a CSS mask. That way it always shows. */
+:root {
+  --yuni-ico-play: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%3E%3Cpath%20d='M7%203.8v16.4a1%201%200%200%200%201.5.86l13.4-8.2a1%201%200%200%200%200-1.72L8.5%202.94A1%201%200%200%200%207%203.8z'/%3E%3C/svg%3E");
+  --yuni-ico-pause: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%3E%3Crect%20x='5'%20y='3'%20width='5'%20height='18'%20rx='1.2'/%3E%3Crect%20x='14'%20y='3'%20width='5'%20height='18'%20rx='1.2'/%3E%3C/svg%3E");
+}
+[data-testid="play-button"],
+[data-testid="control-button-playpause"] {
+  position: relative !important;
+  background: linear-gradient(180deg, var(--yuni-btn-top,#ff3a3a), var(--yuni-btn-bottom,#d10000)) !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  color: #fff !important;
+  box-shadow: 0 6px 20px rgba(var(--yuni-accent-rgb,255,43,43), .4), inset 0 1px 0 rgba(255, 255, 255, .3) !important;
+  transition: filter .12s ease, transform .12s ease;
+}
+[data-testid="play-button"] > *,
+[data-testid="control-button-playpause"] > * {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+[data-testid="play-button"] svg,
+[data-testid="control-button-playpause"] svg { opacity: 0 !important; }
+[data-testid="play-button"]::before,
+[data-testid="control-button-playpause"]::before { display: none !important; }
+[data-testid="play-button"]::after,
+[data-testid="control-button-playpause"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 44%;
+  height: 44%;
+  background: #fff;
+  pointer-events: none;
+  -webkit-mask: var(--yuni-ico-play) 54% 50% / contain no-repeat;
+  mask: var(--yuni-ico-play) 54% 50% / contain no-repeat;
+}
+[data-testid="play-button"][aria-label*="ause"]::after,
+html.yuni-playing [data-testid="control-button-playpause"]::after {
+  -webkit-mask: var(--yuni-ico-pause) center / contain no-repeat;
+  mask: var(--yuni-ico-pause) center / contain no-repeat;
+}
+[data-testid="play-button"]:hover,
+[data-testid="control-button-playpause"]:hover { filter: brightness(1.12); transform: scale(1.05); }
+
+/* Player and navigation controls respond with a soft lift instead of abrupt state changes. */
+.Root__now-playing-bar button,.Root__nav-bar button,.main-topBar-container button,[data-testid^="control-button-"]{transition:transform .16s ease,filter .16s ease,background-color .16s ease,color .16s ease}
+.Root__now-playing-bar button:hover,.Root__nav-bar button:hover,.main-topBar-container button:hover{filter:brightness(1.1)}
+.Root__now-playing-bar button:active,.Root__nav-bar button:active,.main-topBar-container button:active,[data-testid^="control-button-"]:active{transform:scale(.96)}
+[data-testid="now-playing-widget"] img{transition:opacity .22s ease,transform .22s ease}
+.Root__now-playing-bar.yuni-song-change [data-testid="cover-art-image"]{animation:yuni-cover-arrive .42s cubic-bezier(.2,.75,.25,1)}
+.Root__now-playing-bar.yuni-song-change [data-testid="context-item-info-title"]{animation:yuni-track-arrive .34s cubic-bezier(.2,.75,.25,1)}
+@keyframes yuni-cover-arrive{from{opacity:.55;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+@keyframes yuni-track-arrive{from{opacity:.35;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+
+/* ---------- search + inputs ---------- */
+[data-testid="search-input"], input[type="search"], input[type="text"] {
+  background: rgba(255, 255, 255, .06) !important;
+  border-radius: var(--yuni-radius-sm) !important;
+}
+[data-testid="search-input"]:focus,
+input[type="search"]:focus, input[type="text"]:focus {
+  box-shadow: 0 0 0 1px var(--yuni-red), var(--yuni-glow) !important;
+}
+
+/* ---------- progress / volume bars ---------- */
+[data-testid="playback-progressbar"],
+[data-testid="volume-bar"] {
+  --fg-color: var(--yuni-red) !important;
+  --progress-bar-color: var(--yuni-red) !important;
+}
+.x-progressBar-fillColor { background-color: var(--yuni-red) !important; }
+
+/* ---------- menus + popovers ---------- */
+[role="menu"], .main-contextMenu-menu, [data-testid="context-menu"] {
+  background: var(--yuni-glass-strong) !important;
+  -webkit-backdrop-filter: var(--yuni-blur);
+  backdrop-filter: var(--yuni-blur);
+  border: 1px solid var(--yuni-border);
+  border-radius: 14px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .6), 0 0 0 1px rgba(var(--yuni-accent-rgb,255,43,43), .06);
+}
+
+/* ---------- details ---------- */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [role="button"]:focus-visible, [role="slider"]:focus-visible { outline: 2px solid var(--yuni-red) !important; outline-offset: 2px; }
+::selection { background: var(--yuni-red); color: #fff; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, .14);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(var(--yuni-accent-rgb,255,43,43), .6); background-clip: padding-box; }
+
+@media (prefers-reduced-motion: reduce) {
+  .main-card-card,.main-card-card img,[data-testid="tracklist-row"],.Root__now-playing-bar button,.Root__nav-bar button,.main-topBar-container button,[data-testid^="control-button-"],[data-testid="now-playing-widget"] img { transition: none; }
+  .main-card-card:hover,.main-card-card:hover img,.Root__now-playing-bar button:active,.Root__nav-bar button:active,.main-topBar-container button:active,[data-testid^="control-button-"]:active { transform: none; }
+  .Root__now-playing-bar.yuni-song-change [data-testid="cover-art-image"],.Root__now-playing-bar.yuni-song-change [data-testid="context-item-info-title"] { animation: none; }
+}
+
+/* ---------- playlist / main view: keep the actual Spotify page visible ---------- */
+.Root__main-view {
+  position: relative;
+  overflow: hidden !important;
+  background:radial-gradient(640px 420px at 8% 0%,rgba(var(--yuni-accent-rgb,255,43,43),.15),transparent 68%),radial-gradient(540px 400px at 98% 84%,rgba(255,255,255,.035),transparent 72%),linear-gradient(145deg,rgba(255,255,255,.045),transparent 34%),rgba(10,11,17,.82)!important;
+  border:1px solid rgba(255,255,255,.13)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.14),inset 0 0 0 1px rgba(var(--yuni-accent-rgb,255,43,43),.035),0 14px 38px rgba(0,0,0,.4)!important;
+}
+.Root__main-view::before {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 42%;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, 0) 70%);
+  pointer-events: none;
+  z-index: 2;
+}
+.Root__main-view .main-view-container,
+.Root__main-view .main-view-container__scroll-node-child,
+.Root__main-view .main-view-container__scroll-node-child-spacer,
+.Root__main-view [data-overlayscrollbars-viewport],
+.Root__main-view .os-host, .Root__main-view .os-viewport,
+.Root__main-view [data-testid="playlist-page"], .Root__main-view [data-testid="album-page"], .Root__main-view [data-testid="artist-page"],
+.Root__main-view [class*="actionBar-ActionBarRow"], .main-topBar-background, .main-topBar-container {
+  background:linear-gradient(145deg,rgba(255,255,255,.035),rgba(255,255,255,.008) 52%),rgba(13,14,20,.74)!important;
+}
+.Root__main-view [class*="entityHeader-background"], .Root__main-view [class*="entityHeader-overlay"], .Root__main-view [class*="entityHeader-gradient"],
+.Root__main-view [class*="ActionBarRow-background"], .Root__main-view [class*="background-color"] {
+  background:linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.012)),rgba(20,20,26,.82)!important;
+}
+/* no outline box when the page itself takes focus (e.g. after opening a playlist) */
+.Root__main-view, .Root__main-view *:not(button):not(a):not(input):not(select):not(textarea):focus,
+.Root__main-view *:not(button):not(a):not(input):not(select):not(textarea):focus-visible,
+.Root__main-view [tabindex="-1"]:focus-visible { outline: none !important; box-shadow: none; }

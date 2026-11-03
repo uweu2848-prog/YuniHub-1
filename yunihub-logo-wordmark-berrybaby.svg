@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="112" viewBox="0 0 520 112">
+<defs><linearGradient id="word" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#607b65"/><stop offset="1" stop-color="#8EA58C"/></linearGradient></defs>
+<g transform="translate(4 4) scale(.2)">
+  <rect width="512" height="512" rx="112" fill="#8EA58C"/>
+  <path d="M256 153c-78-54-160 7-133 105 20 72 86 147 133 191 47-44 113-119 133-191 27-98-55-159-133-105z" fill="#F5C3C2" stroke="#8EA58C" stroke-width="8"/>
+  <path d="M256 155c-8-41-39-63-74-53 8 23 30 41 58 47-30-28-69-31-93-12 18 25 48 34 82 28-24 10-38 29-40 52 31-5 54-24 67-51 13 27 36 46 67 51-2-23-16-42-40-52 34 6 64-3 82-28-24-19-63-16-93 12 28-6 50-24 58-47-35-10-66 12-74 53z" fill="#607b65"/>
+</g>
+<text x="124" y="77" fill="url(#word)" font-family="Segoe UI,Arial,sans-serif" font-size="57" font-weight="750">YuniHub</text>
+<text x="127" y="101" fill="#77877a" font-family="Segoe UI,Arial,sans-serif" font-size="11" font-weight="700" letter-spacing="2.4">BERRY BABY</text>
+</svg>

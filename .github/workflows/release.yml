@@ -1,0 +1,33 @@
+name: Release
+
+"on":
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm --prefix yunispot test
+      - run: npm run stage:yunispot
+      - run: npm run build:renderer
+      - run: npm run pack:yunispot
+      - run: npx electron-builder --win nsis --publish always
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Attach standalone YuniSpot package
+        shell: pwsh
+        run: gh release upload $env:GITHUB_REF_NAME (Get-Item 'release-assets\yunispot-*.tgz').FullName --repo $env:GITHUB_REPOSITORY --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -1,0 +1,46 @@
+/*
+ * Midnight theme (same structure as Yuni; only config.json colors differ). Colors come from config.json (injected as CSS variables above this file).
+ * Rules below only use stable hooks (Spotify's CSS variables, data-testid, long-lived Root__* classes).
+ * Deliberately no universal selectors, no backdrop-filter, no heavy shadows: it keeps the UI fast.
+ * If a rule stops matching after a Spotify update, inspect the element with DevTools (Ctrl+Shift+I).
+ */
+:root {
+  --yuni-radius: 16px;
+  --yuni-radius-sm: 10px;
+}
+
+/* rounded main surfaces */
+.Root__main-view,
+.Root__nav-bar .main-yourLibraryX-libraryContainer,
+.Root__right-sidebar {
+  border-radius: var(--yuni-radius);
+}
+.Root__top-container { gap: 8px; }
+
+/* now-playing bar */
+[data-testid="now-playing-bar"] {
+  border-radius: var(--yuni-radius);
+}
+
+/* accent focus ring (keyboard users) */
+:focus-visible {
+  outline: 2px solid var(--yuni-accent, var(--essential-bright-accent)) !important;
+  outline-offset: 2px;
+}
+
+/* slim scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, .14);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, .28); background-clip: padding-box; }
+
+/* text selection */
+::selection { background: var(--yuni-accent, var(--essential-bright-accent)); color: #fff; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

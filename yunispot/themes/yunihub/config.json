@@ -1,0 +1,14 @@
+{
+  "name": "YuniHub",
+  "description": "Red and black aero-glass. Matches the YuniHub look: glass panels, red glow, monospace type.",
+  "colors": {
+    "base": "rgba(14, 14, 19, 0.62)",
+    "highlight": "rgba(255, 255, 255, 0.06)",
+    "press": "rgba(255, 255, 255, 0.03)",
+    "elevated": "rgba(22, 22, 28, 0.94)",
+    "elevatedHighlight": "rgba(255, 255, 255, 0.09)",
+    "text": "#f5f5f7",
+    "subdued": "#a6a6b3",
+    "accent": "#ff2b2b"
+  }
+}

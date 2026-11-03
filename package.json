@@ -8,22 +8,31 @@
   "license": "MIT",
   "scripts": {
     "build:renderer": "esbuild renderer/app.js renderer/script-preview.js --bundle --minify --platform=browser --format=esm --splitting --target=chrome130 --outdir=renderer/generated",
+    "build:discord-assets": "electron scripts/export-discord-assets.cjs",
     "test": "node --test",
     "start": "npm run build:renderer && electron .",
     "dev": "npm run build:renderer && electron . --dev",
-    "dist": "npm run build:renderer && electron-builder --win nsis",
-    "dist:dir": "npm run build:renderer && electron-builder --dir",
-    "release": "npm run build:renderer && electron-builder --win nsis --publish always"
+    "stage:yunispot": "node scripts/stage-yunispot.cjs",
+    "pack:yunispot": "node scripts/pack-yunispot.cjs",
+    "dist": "npm run stage:yunispot && npm run build:renderer && electron-builder --win nsis",
+    "dist:dir": "npm run stage:yunispot && npm run build:renderer && electron-builder --dir",
+    "release": "npm run stage:yunispot && npm run build:renderer && electron-builder --win nsis --publish always"
   },
   "devDependencies": {
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8",
-    "esbuild": "^0.28.2"
+    "pkg": "^5.8.1"
   },
   "build": {
     "appId": "com.yunihub.app",
     "productName": "YuniHub",
-    "publish": [{ "provider": "github", "owner": "nanasesumireofficial-dot", "repo": "YuniHub" }],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "uweu2848-prog",
+        "repo": "YuniHub"
+      }
+    ],
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -31,14 +40,31 @@
     "files": [
       "main.js",
       "preload.js",
+      "workspace-files.cjs",
+      "workspace-diagnostics.cjs",
+      "studio-terminal.cjs",
       "renderer/**/*",
       "yuniku-scripts/**/*",
       "build/icon.png",
       "build/yunihub-icon.svg",
       "build/yunihub-icon-dehbify.svg",
+      "build/yunihub-icon-berrybaby.svg",
+      "build/berrybaby-cursor.svg",
       "yunihub-logo-wordmark.svg",
       "yunihub-logo-wordmark-dehbify.svg",
+      "yunihub-logo-wordmark-berrybaby.svg",
+      "discord assets/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "orb-completer/Discord Quest Completer.exe",
+        "to": "orb-completer/Discord Quest Completer.exe"
+      },
+      {
+        "from": "build/staged-yunispot",
+        "to": "yunispot"
+      }
     ],
     "win": {
       "target": "nsis",
@@ -57,6 +83,7 @@
     "chokidar": "^4.0.3",
     "codemirror": "^6.0.2",
     "electron-updater": "^6.8.9",
+    "esbuild": "^0.28.2",
     "fuse.js": "^7.5.0"
   }
 }

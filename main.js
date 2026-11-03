@@ -1,9 +1,15 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, globalShortcut, nativeImage, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, globalShortcut, nativeImage, screen, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { spawn } = require('child_process');
+const crypto = require('crypto');
+const { spawn, execFile } = require('child_process');
+const { promisify } = require('util');
+const execFileAsync = promisify(execFile);
+const workspaceFiles = require('./workspace-files.cjs');
+const { diagnoseWorkspace } = require('./workspace-diagnostics.cjs');
+const { buildStudioCommandInput } = require('./studio-terminal.cjs');
 const chokidar = require('chokidar');
 const { autoUpdater } = require('electron-updater');
 
@@ -13,11 +19,13 @@ const isLinux = process.platform === 'linux';
 const APP_MODE = process.argv.includes('--dev') ? 'dev' : 'release';
 const AUTH_SERVER_URL = (process.env.YUNIHUB_AUTH_URL || process.env.AUTH_SERVER_URL || 'https://yunihub-production-5c47.up.railway.app').replace(/\/$/, '');
 const DEFAULT_DISCORD_APP_ID = '1511173773204652092';
+let yuniSpotOperation = false;
 
 const THEMES = {
   dark: { color: '#05070d', symbolColor: '#d9dcff' },
   rei: { color: '#e8f1fa', symbolColor: '#1b3550' },
-  dehbify: { color: '#05060d', symbolColor: '#a6ffd0' },
+  dehbify: { color: '#0a0712', symbolColor: '#ff63b6' },
+  berrybaby: { color: '#f8eeeb', symbolColor: '#385440' },
   custom: { color: '#101114', symbolColor: '#ffffff' }
 };
 const validHexColor = (value) => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
@@ -51,11 +59,18 @@ function detectSystemProfile() {
 
 const PNG_APP_ICON = path.join(__dirname, 'build', 'icon.png');
 const SVG_APP_ICON = path.join(__dirname, 'build', 'yunihub-icon.svg');
+const ETHERIUM_APP_ICON = path.join(__dirname, 'build', 'yunihub-icon-dehbify.svg');
+const BERRY_BABY_APP_ICON = path.join(__dirname, 'build', 'yunihub-icon-berrybaby.svg');
 const ICON = fs.existsSync(PNG_APP_ICON) ? PNG_APP_ICON : SVG_APP_ICON;
+const themeIconPath = (theme) => theme === 'dehbify' ? ETHERIUM_APP_ICON : (theme === 'berrybaby' ? BERRY_BABY_APP_ICON : ICON);
+const savedThemeIconPath = () => path.join(app.getPath('userData'), 'theme-icon.png');
 const HOTKEY = 'CommandOrControl+Alt+H';
 
 let win = null;
 let tray = null;
+let studioTerminal = null;
+let orbCompleterProcess = null;
+let nextStudioTerminalId = 0;
 let quitting = false;
 let prefs = { closeToTray: false, hotkey: false };
 let updateState = { status: 'idle', version: '', percent: 0, message: 'Updates are checked when YuniHub starts.' };
@@ -66,6 +81,28 @@ autoUpdater.autoInstallOnAppQuit = true;
 function setUpdateState(status, message, details = {}) {
   updateState = { ...updateState, ...details, status, message };
   if (win && !win.isDestroyed()) win.webContents.send('update:status', updateState);
+}
+
+function updateNativeIcon(theme, dataUrl = '') {
+  let icon = null;
+  if (typeof dataUrl === 'string' && dataUrl.length <= 250000 && /^data:image\/png;base64,[A-Za-z0-9+/]+=*$/.test(dataUrl)) {
+    const image = nativeImage.createFromDataURL(dataUrl);
+    if (!image.isEmpty()) {
+      icon = image;
+      try {
+        const iconPath = savedThemeIconPath();
+        fs.mkdirSync(path.dirname(iconPath), { recursive: true });
+        fs.writeFileSync(iconPath, image.toPNG());
+      } catch { /* keep the live icon even if persisting it fails */ }
+    }
+  }
+  if (!icon) {
+    icon = nativeImage.createFromPath(themeIconPath(theme));
+    if (icon.isEmpty()) icon = nativeImage.createFromPath(ICON);
+  }
+  if (win && !win.isDestroyed()) win.setIcon(icon);
+  if (tray) tray.setImage(icon.resize({ width: 16, height: 16 }));
+  if (app.dock) app.dock.setIcon(icon);
 }
 
 autoUpdater.on('checking-for-update', () => setUpdateState('checking', 'Checking GitHub Releases for an update...'));
@@ -132,6 +169,67 @@ const isDir = (p) => {
   try { return fs.statSync(p).isDirectory(); } catch { return false; }
 };
 
+function yuniSpotPaths() {
+  const root = app.isPackaged
+    ? path.join(process.resourcesPath, 'yunispot')
+    : path.resolve(__dirname, '..', 'yunispot');
+  const node = app.isPackaged
+    ? path.join(root, 'node.exe')
+    : process.env.npm_node_execpath || process.env.NODE_EXECUTABLE || '';
+  return { root, node, cli: path.join(root, 'bin', 'yunispot.js') };
+}
+
+function getYuniSpotStatus() {
+  const paths = yuniSpotPaths();
+  if (!paths.node || !fs.existsSync(paths.node) || !fs.existsSync(paths.cli)) {
+    return { available: false, spotify: false, yuniSpot: false, error: 'Bundled YuniSpot is unavailable in this build.' };
+  }
+  try {
+    const config = require(path.join(paths.root, 'src', 'config'));
+    const adblock = require(path.join(paths.root, 'src', 'adblock'));
+    return { available: true, ...adblock.status(config.load()) };
+  } catch (error) {
+    return { available: false, spotify: false, yuniSpot: false, error: error.message || 'Could not check YuniSpot status.' };
+  }
+}
+
+function manageYuniSpot(action) {
+  if (!['apply', 'restore'].includes(action)) return Promise.resolve({ ok: false, error: 'Unknown YuniSpot action.' });
+  if (yuniSpotOperation) return Promise.resolve({ ok: false, error: 'A YuniSpot operation is already running.' });
+  const status = getYuniSpotStatus();
+  if (!status.available) return Promise.resolve({ ok: false, error: status.error });
+  yuniSpotOperation = true;
+  const { root, node, cli } = yuniSpotPaths();
+  return new Promise((resolve) => {
+    let stdout = '';
+    let stderr = '';
+    let child;
+    try {
+      child = spawn(node, [cli, action], { cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (error) {
+      yuniSpotOperation = false;
+      resolve({ ok: false, error: error.message || 'Could not start YuniSpot.' });
+      return;
+    }
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (data) => { if (stdout.length < 100000) stdout += data; });
+    child.stderr.on('data', (data) => { if (stderr.length < 100000) stderr += data; });
+    child.once('error', (error) => {
+      yuniSpotOperation = false;
+      resolve({ ok: false, error: 'Could not start YuniSpot: ' + error.message });
+    });
+    child.once('close', (code) => {
+      yuniSpotOperation = false;
+      if (code !== 0) {
+        resolve({ ok: false, error: (stderr.trim() || stdout.trim() || `YuniSpot exited with status ${code}.`) });
+        return;
+      }
+      resolve({ ok: true, output: stdout.trim() });
+    });
+  });
+}
+
 function watchSpawn(child, okAfterMs = 400) {
   return new Promise((resolve) => {
     let done = false;
@@ -151,6 +249,14 @@ async function launchProject({ mode, target, cwd }) {
   if (cwd && !isDir(cwd)) return { ok: false, error: 'The project folder could not be found.' };
 
   if (mode === 'app') {
+    if (target === 'spotify:') {
+      try {
+        await shell.openExternal(target);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: `Could not open Spotify: ${e.message}` };
+      }
+    }
     if (!fs.existsSync(target)) return { ok: false, error: `Cannot find ${target}` };
     const err = await shell.openPath(target);
     return err ? { ok: false, error: err } : { ok: true };
@@ -183,17 +289,209 @@ async function launchProject({ mode, target, cwd }) {
   }
 }
 
-async function openInCode(folder) {
-  folder = str(folder, 1000);
-  if (!folder || !isDir(folder)) return { ok: false, error: 'Set a project folder first.' };
-  try {
-    const child = spawn('code', [folder], { detached: true, stdio: 'ignore', shell: isWin });
-    child.unref();
-    const r = await watchSpawn(child, 1500);
-    return r.ok ? r : { ok: false, error: r.error.includes('ENOENT') ? 'VS Code is not on your PATH (the "code" command).' : r.error };
-  } catch (e) {
-    return { ok: false, error: e.message };
+async function detectStudioToolchains() {
+  const probes = [
+    ['Git', 'git', ['--version']], ['Node.js', 'node', ['--version']], ['npm', 'npm', ['--version']],
+    ['Python', 'python', ['--version']], ['.NET SDK', 'dotnet', ['--version']], ['Java', 'java', ['-version']],
+    ['Go', 'go', ['version']], ['Rust', 'rustc', ['--version']], ['CMake', 'cmake', ['--version']],
+    ['C compiler', 'clang', ['--version']], ['C compiler', 'gcc', ['--version']], ['C++ compiler', 'g++', ['--version']],
+    ['MSVC compiler', 'cl', []], ['PHP', 'php', ['--version']], ['Ruby', 'ruby', ['--version']],
+    ['Perl', 'perl', ['--version']], ['Lua', 'lua', ['-v']], ['Swift', 'swift', ['--version']],
+    ['Dart', 'dart', ['--version']], ['Flutter', 'flutter', ['--version']], ['Deno', 'deno', ['--version']],
+    ['Bun', 'bun', ['--version']], ['Gradle', 'gradle', ['--version']], ['Maven', 'mvn', ['--version']],
+    ['Android Debug Bridge', 'adb', ['version']]
+  ];
+  const tools = (await Promise.all(probes.map(async ([name, command, args]) => {
+    try {
+      const { stdout, stderr } = await execFileAsync(command, args, { encoding: 'utf8', timeout: 2500, windowsHide: true });
+      const output = stdout || stderr || '';
+      return { name, version: str(output.split(/\r?\n/).find(Boolean), 120) || 'Installed' };
+    } catch {
+      return null;
+    }
+  }))).filter(Boolean);
+
+  const codeExecutable = findCodeExecutable();
+  if (codeExecutable) {
+    try {
+      const options = { encoding: 'utf8', timeout: 2500, windowsHide: true };
+      const { stdout, stderr } = isWin && codeExecutable === 'code'
+        ? await execFileAsync('cmd.exe', ['/d', '/s', '/c', 'code --version'], options)
+        : await execFileAsync(codeExecutable, ['--version'], options);
+      const output = stdout || stderr || '';
+      tools.push({ name: 'VS Code', version: str(output.split(/\r?\n/).find(Boolean), 120) || 'Installed' });
+    } catch { /* VS Code did not respond to its version command. */ }
   }
+
+  let visualStudio = null;
+  if (isWin) {
+    const installer = path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Microsoft Visual Studio', 'Installer', 'vswhere.exe');
+    try {
+      const options = { encoding: 'utf8', timeout: 3000, windowsHide: true };
+      const { stdout } = await execFileAsync(installer, ['-latest', '-products', '*', '-version', '[17.0,18.0)', '-property', 'installationPath'], options);
+      const installPath = stdout.trim();
+      const { stdout: version } = await execFileAsync(installer, ['-latest', '-products', '*', '-version', '[17.0,18.0)', '-property', 'installationVersion'], options);
+      const executable = path.join(installPath, 'Common7', 'IDE', 'devenv.exe');
+      if (installPath && fs.existsSync(executable)) visualStudio = { name: 'Visual Studio 2022', version: version.trim(), path: executable };
+    } catch { /* Visual Studio Installer may not be installed. */ }
+  }
+  return { tools, visualStudio };
+}
+
+function runStudioCommand({ command, cwd }) {
+  command = str(command, 2000);
+  cwd = str(cwd, 1000);
+  if (!command) return Promise.resolve({ ok: false, error: 'Enter a command first.' });
+  if (!cwd || !isDir(cwd)) return Promise.resolve({ ok: false, error: 'Choose an existing project folder first.' });
+
+  const executable = isWin ? 'powershell.exe' : (isMac ? '/bin/zsh' : '/bin/bash');
+  const args = isWin ? ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command] : ['-lc', command];
+  return new Promise((resolve) => {
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    let timer;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ ...result, stdout: stdout.slice(-48000), stderr: stderr.slice(-48000), output: `${stdout}${stderr ? `\n${stderr}` : ''}`.slice(-48000) });
+    };
+    let child;
+    try {
+      child = spawn(executable, args, { cwd, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (error) {
+      finish({ ok: false, error: error.message });
+      return;
+    }
+    child.stdout.on('data', (chunk) => { stdout = (stdout + chunk.toString()).slice(-48000); });
+    child.stderr.on('data', (chunk) => { stderr = (stderr + chunk.toString()).slice(-48000); });
+    child.once('error', (error) => finish({ ok: false, error: error.message }));
+    child.once('close', (code) => finish(code === 0 ? { ok: true } : { ok: false, error: `Command exited with code ${code}.` }));
+    timer = setTimeout(() => {
+      child.kill();
+      finish({ ok: false, error: 'Command timed out after 60 seconds.' });
+    }, 60000);
+  });
+}
+
+function stopStudioTerminal(sessionId, reason = 'Terminal stopped.') {
+  const session = studioTerminal;
+  if (!session || (sessionId && session.id !== sessionId)) return { ok: true };
+  studioTerminal = null;
+  if (isWin) {
+    try {
+      const killer = spawn('taskkill.exe', ['/PID', String(session.child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+      killer.unref();
+    } catch { /* terminate the shell itself below */ }
+    session.child.kill();
+  } else {
+    try { process.kill(-session.child.pid, 'SIGTERM'); }
+    catch { session.child.kill('SIGTERM'); }
+  }
+  if (win && !win.isDestroyed()) win.webContents.send('studio:terminal:data', { sessionId: session.id, type: 'stopped', text: reason });
+  return { ok: true };
+}
+
+function startStudioTerminal(folder) {
+  folder = str(folder, 1000);
+  if (!folder || !isDir(folder)) return { ok: false, error: 'Choose an existing project folder first.' };
+  if (studioTerminal && studioTerminal.cwd === folder && !studioTerminal.child.killed) return { ok: true, sessionId: studioTerminal.id };
+  if (studioTerminal) stopStudioTerminal(studioTerminal.id, 'Previous terminal stopped.');
+
+  const id = `terminal-${Date.now()}-${++nextStudioTerminalId}`;
+  const executable = isWin ? 'powershell.exe' : (isMac ? '/bin/zsh' : '/bin/bash');
+  const args = isWin
+    ? ['-NoLogo', '-NoProfile', '-NoExit', '-Command', '$OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()']
+    : (isMac ? ['-l'] : ['--noprofile', '--norc', '-i']);
+  try {
+    const child = spawn(executable, args, { cwd: folder, detached: !isWin, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    const session = { id, child, cwd: folder, owner: win && win.webContents };
+    studioTerminal = session;
+    const emit = (type, data) => {
+      if (studioTerminal === session && win && !win.isDestroyed() && session.owner === win.webContents) {
+        win.webContents.send('studio:terminal:data', { sessionId: id, type, text: data.toString() });
+      }
+    };
+    child.stdout.on('data', (data) => emit('stdout', data));
+    child.stderr.on('data', (data) => emit('stderr', data));
+    child.once('error', (error) => emit('error', error.message));
+    child.once('close', (code) => {
+      emit('exit', `Shell exited${code == null ? '' : ` with code ${code}`}.`);
+      if (studioTerminal === session) studioTerminal = null;
+    });
+    return { ok: true, sessionId: id };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+}
+
+function writeStudioTerminal({ sessionId, command, marker }) {
+  const session = studioTerminal;
+  command = str(command, 10000);
+  marker = str(marker, 80);
+  if (!session || session.id !== sessionId) return { ok: false, error: 'The terminal session is not running.' };
+  if (!command) return { ok: false, error: 'Enter a command first.' };
+  try {
+    const input = buildStudioCommandInput(command, marker, process.platform);
+    session.child.stdin.write(input);
+    return { ok: true, marker };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+}
+
+function writeStudioTerminalInput({ sessionId, text }) {
+  const session = studioTerminal;
+  text = str(text, 5000);
+  if (!session || session.id !== sessionId) return { ok: false, error: 'The terminal session is not running.' };
+  if (!text) return { ok: false, error: 'Enter debugger input first.' };
+  try {
+    session.child.stdin.write(text + (isWin ? '\r\n' : '\n'));
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+}
+
+async function listStudioPorts() {
+  try {
+    let output = '';
+    const ports = [];
+    if (isWin) {
+      ({ stdout: output } = await execFileAsync('netstat.exe', ['-ano', '-p', 'tcp'], { encoding: 'utf8', timeout: 5000, windowsHide: true }));
+      for (const line of output.split(/\r?\n/)) {
+        const match = line.match(/^\s*TCP\s+(.+):(\d+)\s+\S+\s+LISTENING\s+(\d+)/i);
+        if (match) ports.push({ address: match[1], port: Number(match[2]), process: match[3] });
+      }
+    } else if (isMac) {
+      ({ stdout: output } = await execFileAsync('lsof', ['-nP', '-iTCP', '-sTCP:LISTEN'], { encoding: 'utf8', timeout: 5000 }));
+      for (const line of output.split(/\r?\n/).slice(1)) {
+        const match = line.match(/^(\S+)\s+(\d+).*?\sTCP\s+(.+):(\d+)\s+\(LISTEN\)/);
+        if (match) ports.push({ address: match[3], port: Number(match[4]), process: `${match[1]} (${match[2]})` });
+      }
+    } else {
+      ({ stdout: output } = await execFileAsync('ss', ['-ltnp'], { encoding: 'utf8', timeout: 5000 }));
+      for (const line of output.split(/\r?\n/).slice(1)) {
+        const match = line.match(/\s(\S+):(\d+)\s+\S+:\S+.*?pid=(\d+)/);
+        if (match) ports.push({ address: match[1], port: Number(match[2]), process: match[3] });
+      }
+    }
+    const unique = Array.from(new Map(ports.map((port) => [`${port.address}:${port.port}:${port.process}`, port])).values());
+    return { ok: true, ports: unique.sort((a, b) => a.port - b.port) };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Could not inspect listening ports.' };
+  }
+}
+
+function findCodeExecutable() {
+  if (!isWin) return 'code';
+  const candidates = [
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Microsoft VS Code', 'Code.exe'),
+    path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Microsoft VS Code', 'Code.exe'),
+    path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Microsoft VS Code', 'Code.exe')
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate)) || 'code';
 }
 
 function sendDiscordAuthResult(payload) {
@@ -272,6 +570,39 @@ async function refreshDiscordSession(sessionToken) {
 
 /* ---------- IPC ---------- */
 
+function launchOrbCompleter() {
+  if (!isWin) return { ok: false, error: 'Orb Completer is currently available on Windows only.' };
+  const executable = app.isPackaged
+    ? path.join(process.resourcesPath, 'orb-completer', 'Discord Quest Completer.exe')
+    : path.join(__dirname, 'orb-completer', 'Discord Quest Completer.exe');
+  if (!fs.existsSync(executable)) return { ok: false, error: 'The Orb Completer companion is missing from this YuniHub install.' };
+  if (orbCompleterProcess && orbCompleterProcess.exitCode === null && !orbCompleterProcess.killed) {
+    return { ok: true, alreadyRunning: true };
+  }
+
+  return new Promise((resolve) => {
+    let child;
+    let settled = false;
+    try {
+      child = spawn(executable, [], { detached: true, stdio: 'ignore', windowsHide: false });
+    } catch (error) {
+      resolve({ ok: false, error: error.message });
+      return;
+    }
+    orbCompleterProcess = child;
+    child.once('error', (error) => {
+      if (orbCompleterProcess === child) orbCompleterProcess = null;
+      if (!settled) { settled = true; resolve({ ok: false, error: error.message }); }
+    });
+    child.once('spawn', () => {
+      child.once('exit', () => { if (orbCompleterProcess === child) orbCompleterProcess = null; });
+      child.unref();
+      settled = true;
+      resolve({ ok: true });
+    });
+  });
+}
+
 // Only our own window may talk to the main process.
 function handle(channel, fn) {
   ipcMain.handle(channel, (event, ...args) => {
@@ -284,7 +615,7 @@ function handle(channel, fn) {
 const net = require('net');
 const http = require('http');
 const BEACON_PORT = 47321;
-let rpc = { sock: null, user: null };
+let rpc = { sock: null, user: null, startedAt: 0 };
 let beacons = { youtube: false, twitch: false };
 let beaconServer = null;
 
@@ -316,7 +647,7 @@ const rpcFrame = (op, data) => {
 
 function rpcDisconnect() {
   if (rpc.sock) { try { rpc.sock.destroy(); } catch { /* ignore */ } }
-  rpc = { sock: null, user: null };
+  rpc = { sock: null, user: null, startedAt: 0 };
 }
 
 function rpcConnect(clientId) {
@@ -350,7 +681,8 @@ function rpcConnect(clientId) {
             buf = buf.subarray(8 + len);
             if (msg.evt === 'READY' && msg.data) {
               rpc.user = msg.data.user;
-              setActivity({ details: 'Exploring YuniHub', state: 'Building something new' });
+              rpc.startedAt = Math.floor(Date.now() / 1000);
+              setActivity(buildActivity({ details: 'Exploring YuniHub', state: 'Building something new' }));
               finish({ ok: true, user: rpc.user });
             }
           }
@@ -363,6 +695,25 @@ function rpcConnect(clientId) {
   });
 }
 
+const ASSET_KEY = /^[a-z0-9_]{1,32}$/;
+function buildActivity(input) {
+  const x = input || {};
+  const activity = { timestamps: { start: rpc.startedAt || (rpc.startedAt = Math.floor(Date.now() / 1000)) } };
+  const details = str(x.details, 128), state = str(x.state, 128);
+  if (details.length >= 2) activity.details = details;
+  if (state.length >= 2) activity.state = state;
+  const assets = {
+    large_image: ASSET_KEY.test(x.largeImage || '') ? x.largeImage : 'yunihub',
+    large_text: str(x.largeText, 128) || 'YuniHub by S.M.T Modding Team'
+  };
+  if (ASSET_KEY.test(x.smallImage || '')) {
+    assets.small_image = x.smallImage;
+    const smallText = str(x.smallText, 128);
+    if (smallText.length >= 2) assets.small_text = smallText;
+  }
+  activity.assets = assets;
+  return activity;
+}
 function setActivity(activity) {
   if (!rpc.sock) return false;
   try {
@@ -691,6 +1042,190 @@ async function watchUserScripts(userFolder) {
   return { ok: true, watching: true };
 }
 
+const SPOTIFY_REDIRECT_URI = 'http://127.0.0.1:43821/callback';
+const SPOTIFY_TOKEN_FILE = () => path.join(app.getPath('userData'), 'spotify-refresh-token.dat');
+let spotifyAuthServer = null;
+let spotifyAuthTimeout = null;
+let spotifyAuthState = '';
+let spotifyCodeVerifier = '';
+let spotifyAuthClientId = '';
+let spotifyAccessToken = '';
+let spotifyAccessExpiresAt = 0;
+let spotifyAccessClientId = '';
+
+function closeSpotifyAuthServer() {
+  clearTimeout(spotifyAuthTimeout);
+  spotifyAuthTimeout = null;
+  spotifyAuthState = '';
+  spotifyCodeVerifier = '';
+  if (spotifyAuthServer) {
+    const server = spotifyAuthServer;
+    spotifyAuthServer = null;
+    server.close();
+  }
+}
+
+function readSpotifyRefreshToken() {
+  if (!safeStorage.isEncryptionAvailable()) return '';
+  try { return safeStorage.decryptString(fs.readFileSync(SPOTIFY_TOKEN_FILE())); }
+  catch { return ''; }
+}
+
+function saveSpotifyRefreshToken(token) {
+  if (!safeStorage.isEncryptionAvailable()) throw new Error('Secure token storage is unavailable on this device.');
+  fs.mkdirSync(path.dirname(SPOTIFY_TOKEN_FILE()), { recursive: true });
+  fs.writeFileSync(SPOTIFY_TOKEN_FILE(), safeStorage.encryptString(token), { mode: 0o600 });
+}
+
+async function spotifyTokenRequest(values) {
+  const response = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(values)
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error_description || data.error || `Spotify token request failed (${response.status}).`);
+  return data;
+}
+
+async function startSpotifyAuthorization(clientId) {
+  clientId = str(clientId, 80);
+  if (!/^[A-Za-z0-9]{32}$/.test(clientId)) return { ok: false, error: 'Enter a valid 32-character Spotify Client ID.' };
+  if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'Secure token storage is unavailable on this device.' };
+  closeSpotifyAuthServer();
+
+  spotifyAuthClientId = clientId;
+  spotifyAuthState = crypto.randomBytes(24).toString('hex');
+  spotifyCodeVerifier = crypto.randomBytes(48).toString('base64url');
+  const challenge = crypto.createHash('sha256').update(spotifyCodeVerifier).digest('base64url');
+  const state = spotifyAuthState;
+  const server = http.createServer(async (request, response) => {
+    const callback = new URL(request.url || '/', SPOTIFY_REDIRECT_URI);
+    const finishPage = (status, title, message) => {
+      response.writeHead(status, { 'content-type': 'text/html; charset=utf-8' });
+      response.end(`<!doctype html><html><meta charset="utf-8"><title>YuniHub Spotify</title><body style="font:16px Segoe UI,sans-serif;padding:40px;background:#101114;color:#f6f1f2"><h1>${title}</h1><p>${message}</p><p>You can return to YuniHub.</p></body></html>`);
+    };
+    if (callback.pathname !== '/callback') { finishPage(404, 'Not found', 'This is not the YuniHub Spotify callback.'); return; }
+    if (callback.searchParams.get('state') !== state) { finishPage(400, 'Sign-in expired', 'The Spotify sign-in state did not match. Start again in YuniHub.'); closeSpotifyAuthServer(); return; }
+    const code = callback.searchParams.get('code');
+    const authError = callback.searchParams.get('error');
+    if (!code || authError) {
+      finishPage(400, 'Spotify connection cancelled', authError || 'No authorization code was returned.');
+      if (win && !win.isDestroyed()) win.webContents.send('spotify:auth-result', { ok: false, error: authError || 'Spotify authorization was cancelled.' });
+      closeSpotifyAuthServer();
+      return;
+    }
+    const verifier = spotifyCodeVerifier;
+    const authClientId = spotifyAuthClientId;
+    try {
+      const token = await spotifyTokenRequest({
+        client_id: authClientId,
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: SPOTIFY_REDIRECT_URI,
+        code_verifier: verifier
+      });
+      if (!token.refresh_token) throw new Error('Spotify did not return a refresh token. Disconnect any previous YuniHub app authorization and try again.');
+      saveSpotifyRefreshToken(token.refresh_token);
+      spotifyAccessToken = token.access_token || '';
+      spotifyAccessExpiresAt = Date.now() + Math.max(0, Number(token.expires_in) || 3600) * 1000;
+      spotifyAccessClientId = authClientId;
+      finishPage(200, 'Spotify connected', 'YuniHub can now read your current track and update Discord Rich Presence.');
+      if (win && !win.isDestroyed()) win.webContents.send('spotify:auth-result', { ok: true });
+    } catch (error) {
+      finishPage(400, 'Spotify connection failed', error.message || 'Could not finish Spotify sign-in.');
+      if (win && !win.isDestroyed()) win.webContents.send('spotify:auth-result', { ok: false, error: error.message || 'Could not finish Spotify sign-in.' });
+    } finally {
+      closeSpotifyAuthServer();
+    }
+  });
+
+  spotifyAuthServer = server;
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (result) => { if (!settled) { settled = true; resolve(result); } };
+    server.once('error', (error) => {
+      closeSpotifyAuthServer();
+      finish({ ok: false, error: `Could not open the Spotify callback at ${SPOTIFY_REDIRECT_URI}: ${error.message}` });
+    });
+    server.listen(43821, '127.0.0.1', async () => {
+      const authorize = new URL('https://accounts.spotify.com/authorize');
+      authorize.search = new URLSearchParams({
+        client_id: clientId,
+        response_type: 'code',
+        redirect_uri: SPOTIFY_REDIRECT_URI,
+        scope: 'user-read-currently-playing user-read-playback-state',
+        code_challenge_method: 'S256',
+        code_challenge: challenge,
+        state
+      }).toString();
+      try {
+        await shell.openExternal(authorize.toString());
+        finish({ ok: true, redirectUri: SPOTIFY_REDIRECT_URI });
+      } catch (error) {
+        closeSpotifyAuthServer();
+        finish({ ok: false, error: error.message || 'Could not open Spotify sign-in.' });
+      }
+    });
+    spotifyAuthTimeout = setTimeout(() => {
+      if (win && !win.isDestroyed()) win.webContents.send('spotify:auth-result', { ok: false, error: 'Spotify sign-in timed out.' });
+      closeSpotifyAuthServer();
+    }, 5 * 60 * 1000);
+  });
+}
+
+async function spotifyAccessFor(clientId) {
+  if (spotifyAccessToken && spotifyAccessClientId === clientId && spotifyAccessExpiresAt > Date.now() + 60000) return spotifyAccessToken;
+  const refreshToken = readSpotifyRefreshToken();
+  if (!refreshToken) throw new Error('Connect Spotify to read your current track.');
+  const token = await spotifyTokenRequest({ client_id: clientId, grant_type: 'refresh_token', refresh_token: refreshToken });
+  if (token.refresh_token) saveSpotifyRefreshToken(token.refresh_token);
+  spotifyAccessToken = token.access_token || '';
+  spotifyAccessExpiresAt = Date.now() + Math.max(0, Number(token.expires_in) || 3600) * 1000;
+  spotifyAccessClientId = clientId;
+  return spotifyAccessToken;
+}
+
+async function readSpotifyNowPlaying(clientId) {
+  clientId = str(clientId, 80);
+  if (!/^[A-Za-z0-9]{32}$/.test(clientId)) return { ok: false, connected: false, error: 'Set a valid Spotify Client ID first.' };
+  try {
+    const accessToken = await spotifyAccessFor(clientId);
+    const response = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
+      headers: { authorization: `Bearer ${accessToken}` }
+    });
+    if (response.status === 204) return { ok: true, connected: true, track: null };
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return { ok: false, connected: response.status !== 401, error: data.error && data.error.message || `Spotify request failed (${response.status}).` };
+    const item = data.item;
+    if (!item) return { ok: true, connected: true, track: null };
+    return {
+      ok: true,
+      connected: true,
+      track: {
+        name: str(item.name, 200),
+        artists: Array.isArray(item.artists) ? item.artists.map((artist) => str(artist.name, 100)).filter(Boolean).join(', ') : '',
+        album: str(item.album && item.album.name, 200),
+        image: str(item.album && item.album.images && item.album.images[0] && item.album.images[0].url, 1000),
+        url: str(item.external_urls && item.external_urls.spotify, 1000),
+        progressMs: Math.max(0, Number(data.progress_ms) || 0),
+        durationMs: Math.max(0, Number(item.duration_ms) || 0),
+        isPlaying: !!data.is_playing
+      }
+    };
+  } catch (error) {
+    return { ok: false, connected: false, error: error.message || 'Could not read Spotify playback.' };
+  }
+}
+
+function disconnectSpotify() {
+  spotifyAccessToken = '';
+  spotifyAccessExpiresAt = 0;
+  spotifyAccessClientId = '';
+  try { fs.unlinkSync(SPOTIFY_TOKEN_FILE()); } catch { /* no token to remove */ }
+  return { ok: true };
+}
+
 function registerIpc() {
   handle('store:load', () => loadData());
   handle('store:save', (data) => saveData(data));
@@ -701,7 +1236,35 @@ function registerIpc() {
     return r.canceled || !r.filePaths[0] ? null : r.filePaths[0];
   });
 
+  handle('appearance:pickFont', async () => {
+    const result = await dialog.showOpenDialog(win, {
+      properties: ['openFile'],
+      filters: [{ name: 'Font files', extensions: ['woff2', 'woff', 'ttf', 'otf'] }]
+    });
+    return result.canceled || !result.filePaths[0] ? null : result.filePaths[0];
+  });
+  handle('appearance:readFont', (fontPath) => {
+    fontPath = str(fontPath, 1000);
+    const mimeByExtension = { '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.otf': 'font/otf' };
+    const mime = mimeByExtension[path.extname(fontPath).toLowerCase()];
+    if (!mime || !fs.existsSync(fontPath)) return { ok: false, error: 'Choose an existing WOFF, WOFF2, TTF, or OTF font file.' };
+    try {
+      const stat = fs.statSync(fontPath);
+      if (!stat.isFile() || stat.size <= 0 || stat.size > 8 * 1024 * 1024) return { ok: false, error: 'Font files must be smaller than 8 MB.' };
+      const data = fs.readFileSync(fontPath);
+      return { ok: true, dataUrl: `data:${mime};base64,${data.toString('base64')}` };
+    } catch (error) {
+      return { ok: false, error: error.message || 'Could not load that font file.' };
+    }
+  });
+  handle('spotify:connect', (clientId) => startSpotifyAuthorization(clientId));
+  handle('spotify:status', (clientId) => readSpotifyNowPlaying(clientId));
+  handle('spotify:disconnect', () => disconnectSpotify());
+
   handle('project:launch', (opts) => launchProject(opts || {}));
+  handle('yunispot:status', () => getYuniSpotStatus());
+  handle('yunispot:manage', (action) => manageYuniSpot(str(action, 20)));
+  handle('orb-completer:launch', () => launchOrbCompleter());
 
   handle('project:reveal', async (folder) => {
     folder = str(folder, 1000);
@@ -710,7 +1273,37 @@ function registerIpc() {
     return err ? { ok: false, error: err } : { ok: true };
   });
 
-  handle('project:code', (folder) => openInCode(folder));
+  handle('studio:runCommand', (request) => runStudioCommand(request || {}));
+  handle('studio:terminalStart', (folder) => startStudioTerminal(folder));
+  handle('studio:terminalWrite', (request) => writeStudioTerminal(request || {}));
+  handle('studio:terminalInput', (request) => writeStudioTerminalInput(request || {}));
+  handle('studio:terminalStop', (sessionId) => stopStudioTerminal(sessionId));
+  handle('studio:toolchains', () => detectStudioToolchains());
+  handle('studio:ports', () => listStudioPorts());
+  handle('workspace:listFiles', (folder) => {
+    try { return { ok: true, files: workspaceFiles.listWorkspaceFiles(folder) }; }
+    catch (error) { return { ok: false, error: error.message }; }
+  });
+  handle('workspace:diagnose', (folder) => {
+    try { return { ok: true, ...diagnoseWorkspace(folder) }; }
+    catch (error) { return { ok: false, error: error.message }; }
+  });
+  handle('workspace:readFile', (request) => {
+    try { return { ok: true, content: workspaceFiles.readWorkspaceFile(request && request.folder, request && request.path) }; }
+    catch (error) { return { ok: false, error: error.message }; }
+  });
+  handle('workspace:saveFile', (request) => {
+    try {
+      const filePath = workspaceFiles.writeWorkspaceFile(request && request.folder, request && request.path, request && request.content);
+      return { ok: true, path: filePath };
+    } catch (error) { return { ok: false, error: error.message }; }
+  });
+  handle('workspace:createFile', (request) => {
+    try {
+      const filePath = workspaceFiles.createWorkspaceFile(request && request.folder, request && request.path, request && request.content || '');
+      return { ok: true, path: filePath };
+    } catch (error) { return { ok: false, error: error.message }; }
+  });
 
   handle('tool:weather', (city) => getWeather(city));
   handle('tool:listScripts', (userFolder) => listScripts(userFolder));
@@ -735,7 +1328,7 @@ function registerIpc() {
     const details = str(activity && activity.details, 128);
     const state = str(activity && activity.state, 128);
     if (!details && !state) return false;
-    return setActivity({ details, state });
+    return setActivity(buildActivity(activity));
   });
   handle('beacon:set', (b) => {
     beacons = { youtube: !!(b && b.youtube), twitch: !!(b && b.twitch) };
@@ -824,12 +1417,13 @@ function registerIpc() {
     return app.getLoginItemSettings().openAtLogin;
   });
 
-  handle('app:setTheme', (theme, customBackground) => {
+  handle('app:setTheme', (theme, customBackground, iconDataUrl) => {
     const t = resolveTheme(theme, customBackground);
     if (win && !isLinux && win.setTitleBarOverlay) {
       try { win.setTitleBarOverlay({ color: t.color, symbolColor: t.symbolColor, height: 40 }); } catch { /* window has no titlebar overlay */ }
     }
     if (win) win.setBackgroundColor(t.color);
+    updateNativeIcon(theme, iconDataUrl);
     return true;
   });
 
@@ -924,7 +1518,7 @@ function saveBounds() {
 function createWindow() {
   const saved = loadData();
   const settings = saved && saved.settings || {};
-  const theme = ['rei', 'dehbify', 'custom'].includes(settings.theme) ? settings.theme : 'dark';
+  const theme = ['rei', 'dehbify', 'berrybaby', 'custom'].includes(settings.theme) ? settings.theme : 'dark';
   const t = resolveTheme(theme, settings.customTheme && settings.customTheme.background);
   const b = loadBounds() || {};
 
@@ -938,7 +1532,7 @@ function createWindow() {
     title: 'YuniHub',
     backgroundColor: t.color,
     autoHideMenuBar: true,
-    icon: ICON,
+    icon: fs.existsSync(savedThemeIconPath()) ? savedThemeIconPath() : ICON,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -947,8 +1541,9 @@ function createWindow() {
       spellcheck: false
     }
   });
+  const windowContents = win.webContents;
 
-  win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  win.loadFile(path.join(__dirname, 'renderer', 'index.html'), { query: { theme } });
   win.once('ready-to-show', () => {
     if (b.maximized) win.maximize();
     win.show();
@@ -962,7 +1557,10 @@ function createWindow() {
     saveBounds();
     if (prefs.closeToTray && !quitting) { e.preventDefault(); win.hide(); }
   });
-  win.on('closed', () => { win = null; });
+  win.on('closed', () => {
+    if (studioTerminal && studioTerminal.owner === windowContents) stopStudioTerminal(studioTerminal.id, 'Window closed.');
+    win = null;
+  });
 }
 
 if (!app.requestSingleInstanceLock()) {
